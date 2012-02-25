@@ -30,6 +30,9 @@ Add the following dependency to your `project.clj` file:
 (s3/put-object cred "my-bucket" "some-key" "some-value")
 
 (println (slurp (:content (s3/get-object cred "my-bucket" "some-key"))))
+
+(s3/upload-file cred "my-bucket" "some-key" "/path/to/file")
+
 ```
 
 ## Documentation
