@@ -4,6 +4,9 @@
   Each function takes a map of credentials as its first argument. The
   credentials map should contain an :access-key key and a :secret-key key."
   (:import com.amazonaws.auth.BasicAWSCredentials
+           com.amazonaws.services.s3.transfer.Transfer
+           com.amazonaws.services.s3.transfer.TransferManager
+           com.amazonaws.services.s3.transfer.Upload
            com.amazonaws.services.s3.AmazonS3Client
            com.amazonaws.AmazonServiceException
            com.amazonaws.services.s3.model.ListObjectsRequest
@@ -25,6 +28,14 @@
     (:access-key cred)
     (:secret-key cred))))
 
+(defn- s3-transfer-manager
+  "Create an AmazonS3 Transfer Manager from a map of credentials"
+  [cred]
+  (TransferManager.
+    (BasicAWSCredentials.
+      (:access-key cred)
+      (:secret-key cred))))
+
 (defn bucket-exists?
   "Returns true if the supplied bucket name already exists in S3."
   [cred name]
@@ -39,6 +50,17 @@
   "Delete the S3 bucket with the supplied name."
   [cred name]
   (.deleteBucket (s3-client cred) name))
+
+(defn upload-file
+  "Upload a big file, possibly bigger than 5GB"
+  [cred bucket filename filepath]
+  (let [tm (s3-transfer-manager cred)
+        upload^Upload (.upload tm bucket filename (File. filepath))]
+    (while (not (.isDone upload))
+      (println (str "Transfer: "(.getDescription  upload)))
+      (println (str "  - State: " (.getState upload)))
+      (println (str "  - Progress: " (.getBytesTransfered (.getProgress upload))))
+      (. Thread sleep 2000))))
 
 (defprotocol ^{:no-doc true} ToPutRequest
   "A protocol for constructing a map that represents an S3 put request."
