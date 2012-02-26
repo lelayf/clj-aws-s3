@@ -1,13 +1,17 @@
 (ns aws.sdk.s3
   "Functions to access the Amazon S3 storage service.
-
-  Each function takes a map of credentials as its first argument. The
-  credentials map should contain an :access-key key and a :secret-key key."
+   Supports client side encryption (tested with RSA key generated
+   with keytool). Also supports server-side encryption. Ability
+   to upload files bigger than 5GB when using multipart."
+  (:require [aws.sdk.keypair :as kp])
   (:import com.amazonaws.auth.BasicAWSCredentials
            com.amazonaws.services.s3.transfer.Transfer
            com.amazonaws.services.s3.transfer.TransferManager
            com.amazonaws.services.s3.transfer.Upload
+           com.amazonaws.services.s3.model.ObjectMetadata
            com.amazonaws.services.s3.AmazonS3Client
+           com.amazonaws.services.s3.AmazonS3EncryptionClient
+           com.amazonaws.services.s3.model.EncryptionMaterials
            com.amazonaws.AmazonServiceException
            com.amazonaws.services.s3.model.ListObjectsRequest
            com.amazonaws.services.s3.model.ObjectMetadata
@@ -18,9 +22,10 @@
            java.io.ByteArrayInputStream
            java.io.File
            java.io.InputStream
+           java.io.FileInputStream
            java.nio.charset.Charset))
 
-(defn- s3-client
+(defn s3-client
   "Create an AmazonS3Client instance from a map of credentials."
   [cred]
   (AmazonS3Client.
@@ -28,13 +33,22 @@
     (:access-key cred)
     (:secret-key cred))))
 
-(defn- s3-transfer-manager
-  "Create an AmazonS3 Transfer Manager from a map of credentials"
+(defn s3-encryption-client
+  "Create an AmazonS3EncryptionClient from a map of credentials.
+   Specify your keystore path, keystore password, key alias and
+   key password in the map."
   [cred]
-  (TransferManager.
-    (BasicAWSCredentials.
-      (:access-key cred)
-      (:secret-key cred))))
+  (let [ks (kp/load-keystore :ks-path cred :ks-pwd cred)
+        keypair (kp/get-key-pair ks :key-alias cred :key-pwd cred)]
+    (AmazonS3EncryptionClient.
+      (BasicAWSCredentials. (:access-key cred) (:secret-key cred))
+      (EncryptionMaterials. keypair))))
+
+(defn s3-transfer-manager
+  "Create an AmazonS3 TransferManager from an s3 client.
+   The passed-in client can support client-side encryption or not."
+  [s3client]
+  (TransferManager. s3client)) 
 
 (defn bucket-exists?
   "Returns true if the supplied bucket name already exists in S3."
@@ -52,15 +66,49 @@
   (.deleteBucket (s3-client cred) name))
 
 (defn upload-file
-  "Upload a big file, possibly bigger than 5GB"
-  [cred bucket filename filepath]
-  (let [tm (s3-transfer-manager cred)
-        upload^Upload (.upload tm bucket filename (File. filepath))]
+  "Multipart upload of a file using TransferManager. 
+   File size possibly bigger than 5GB, no server-side encryption"
+  [tm bucket filename filepath]
+  (let [f (File. filepath)
+        len (.length f)
+        elapsed (atom 0)
+        sleep-duration 2
+        upload (.upload tm bucket filename f)]
+    (print (str "TRANSFER: " (.getDescription  upload)))
+    (println (str " (" len " bytes)"))
     (while (not (.isDone upload))
-      (println (str "Transfer: "(.getDescription  upload)))
-      (println (str "  - State: " (.getState upload)))
-      (println (str "  - Progress: " (.getBytesTransfered (.getProgress upload))))
-      (. Thread sleep 2000))))
+      (print (str "\tSTATE: " (.getState upload)))
+      (print (str "\tPROGRESS: " (format "%.2f" (.getPercentTransfered (.getProgress upload)))))
+      (println (str "\tELAPSED: " @elapsed " sec"))
+      (. Thread sleep (* sleep-duration 1000))
+      (swap! elapsed + sleep-duration))))
+
+(defn upload-file-sse
+  "Multipart upload of a file using TransferManager. 
+   Uses server-side encryption (AES-256)"
+  [tm bucket filename filepath]
+  (let [f (File. filepath)
+        len (.length f)
+        fis (FileInputStream. f)
+        objmeta (doto (ObjectMetadata.) 
+                  (.setContentLength len)
+                  (.setServerSideEncryption (ObjectMetadata/AES_256_SERVER_SIDE_ENCRYPTION)))
+        elapsed (atom 0)
+        sleep-duration 2
+        upload (.upload tm 
+                        bucket 
+                        filename 
+                        fis 
+                        objmeta)]
+    (print (str "TRANSFER: " (.getDescription  upload)))
+    (println (str " (" len " bytes)"))
+    (while (not (.isDone upload))
+      (print (str "\tSTATE: " (.getState upload)))
+      (print (str "\tPROGRESS: " (format "%.2f" (.getPercentTransfered (.getProgress upload)))))
+      (println (str "\tELAPSED: " @elapsed " sec"))
+      (. Thread sleep (* sleep-duration 1000))
+      (swap! elapsed + sleep-duration))))
+
 
 (defprotocol ^{:no-doc true} ToPutRequest
   "A protocol for constructing a map that represents an S3 put request."
@@ -102,7 +150,7 @@
                       :content-length
                       :content-md5
                       :content-type
-                      :server-size-encryption))))
+                      :server-side-encryption))))
 
 (defn- ->PutObjectRequest
   "Create a PutObjectRequest instance from a bucket name, key and put request
@@ -120,11 +168,22 @@
 (defn put-object
   "Put a value into an S3 bucket at the specified key. The value can be
   a String, InputStream or File (or anything that implements the ToPutRequest
-  protocol)."
+  protocol). Seems to break when uploading files bigger than 5GB.
+  Does not support client side encryption."
   [cred bucket key value]
   (->> (put-request value)
        (->PutObjectRequest bucket key)
        (.putObject (s3-client cred))))
+
+(defn put-object-client
+  "Same as put-object but pass it a configured s3 client instead of creds.
+  Aim was to be able to use client side encryption but with no success.
+  It works fine with the regular s3 client though."
+  [client bucket key value]
+  (->> (put-request value)
+       (->PutObjectRequest bucket key)
+       (.putObject client)))
+
 
 (defprotocol ^{:no-doc true} Mappable
   "Convert a value into a Clojure map."

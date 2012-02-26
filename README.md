@@ -14,16 +14,17 @@ It doesn't support ACLs yet, but will do in a future release.
 
 ## Install
 
-Add the following dependency to your `project.clj` file:
-
-    [clj-aws-s3 "0.2.1"]
+No release for this fork yet. Clone it or forget it.
 
 ## Example
+
+Basics 
 
 ```clojure
 (require '[aws.sdk.s3 :as s3])
 
-(def cred {:access-key "...", :secret-key "..."})
+(def cred {:access-key "...", 
+	   :secret-key "..."})
 
 (s3/create-bucket cred "my-bucket")
 
@@ -31,7 +32,70 @@ Add the following dependency to your `project.clj` file:
 
 (println (slurp (:content (s3/get-object cred "my-bucket" "some-key"))))
 
-(s3/upload-file cred "my-bucket" "some-key" "/path/to/file")
+```
+
+Multipart upload, no client side encryption, no server-side encryption 
+
+```clojure
+
+(require '[aws.sdk.s3 :as s3])
+
+(def cred {:access-key "...", 
+           :secret-key "..."})
+
+(def s3c (s3/s3-client cred))
+
+(def tm (s3/s3-transfer-manager s3c)) 
+
+(s3/upload-file tm "my-bucket" "some-key" "/path/to/file")
+
+```
+
+Multipart upload, no client side encryption, AES-256 server-side encryption
+
+```clojure
+
+(require '[aws.sdk.s3 :as s3])
+
+(def cred {:access-key "...",
+           :secret-key "..."})
+
+(def s3c (s3/s3-client cred))
+
+(def tm (s3/s3-transfer-manager s3c)) 
+
+(s3/upload-file-sse tm "my-bucket" "some-key" "/path/to/file")
+
+```
+
+
+Multipart upload, RSA client side encryption, no server-side encryption
+
+You can create your keystore anywhere, a hidden folder in your home dir is a good starting place.
+The following will both create a keystore and add an asymetric RSA pair to it: 
+
+```bash
+keytool -genkey -keyalg RSA -dname "cn=John Doe, ou=IT, o=Acme, c=FR" -alias your-key-alias -keystore /path/to/keystore -storepass xxxxx -validity 365
+```
+
+Then simply add the keystore and key info to the cred map.
+
+```clojure
+
+(require '[aws.sdk.s3 :as s3])
+
+(def cred {:access-key "...",
+           :secret-key "...",
+           :ks-path    "/path/to/java/keystore"
+           :ks-pwd     "your keystore password"
+           :key-alias  "alias of key used for client side encryption"
+           :key-pwd    "password of key used for client side encryption" })
+
+(def s3c (s3/s3-client-encryption cred))
+
+(def tm (s3/s3-transfer-manager s3c))
+
+(s3/upload-file tm "my-bucket" "some-key" "/path/to/file")
 
 ```
 
@@ -41,6 +105,7 @@ Add the following dependency to your `project.clj` file:
 
 ## License
 
-Copyright (C) 2012 James Reeves
+Copyright (C) 2012 James Reeves / François Le Lay
 
 Distributed under the Eclipse Public License, the same as Clojure.
+
