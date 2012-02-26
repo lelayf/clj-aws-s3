@@ -18,7 +18,7 @@ No release for this fork yet. Clone it or forget it.
 
 ## Example
 
-Basics 
+### Basics 
 
 ```clojure
 (require '[aws.sdk.s3 :as s3])
@@ -34,7 +34,7 @@ Basics
 
 ```
 
-Multipart upload, with and without server-side encryption 
+### Multipart upload without client-side encryption 
 
 ```clojure
 
@@ -51,10 +51,9 @@ Multipart upload, with and without server-side encryption
 ; no client side encryption, AES-256 server-side encryption
 (s3/upload-file-sse tm "my-bucket" "some-key" "/path/to/file")
 
-
 ```
 
-Multipart upload, RSA client side encryption, no server-side encryption
+### Multipart upload with RSA client-side encryption
 
 You can create your keystore anywhere, a hidden folder in your home dir is a good starting place.
 The following will both create a keystore and add an asymetric RSA pair to it: 
@@ -81,10 +80,10 @@ Then simply add the keystore and key info to the cred map.
 
 (def tm (s3/s3-transfer-manager (s3/s3-client-encryption cred)))
 
-; client side encryption, no SSE
+; RSA client side encryption, no SSE
 (s3/upload-file tm "my-bucket" "some-key" "/path/to/file")
 
-; client side encryption + AES-256 server-side encryption
+; RSA client side encryption + AES-256 server-side encryption
 (s3/upload-file-sse tm "my-bucket" "some-key" "/path/to/file")
 
 ```
