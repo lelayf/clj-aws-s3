@@ -38,8 +38,8 @@
    Specify your keystore path, keystore password, key alias and
    key password in the map."
   [cred]
-  (let [ks (kp/load-keystore :ks-path cred :ks-pwd cred)
-        keypair (kp/get-key-pair ks :key-alias cred :key-pwd cred)]
+  (let [ks (kp/load-keystore (:ks-path cred) (:ks-pwd cred))
+        keypair (kp/get-key-pair ks (:key-alias cred) (:key-pwd cred))]
     (AmazonS3EncryptionClient.
       (BasicAWSCredentials. (:access-key cred) (:secret-key cred))
       (EncryptionMaterials. keypair))))
