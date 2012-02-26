@@ -78,7 +78,7 @@ Then simply add the keystore and key info to the cred map.
            :key-alias  "my-alias"
            :key-pwd    "my-key-password" })
 
-(def tm (s3/s3-transfer-manager (s3/s3-client-encryption cred)))
+(def tm (s3/s3-transfer-manager (s3/s3-encryption-client cred)))
 
 ; RSA client side encryption, no SSE
 (s3/upload-file tm "my-bucket" "some-key" "/path/to/file")
