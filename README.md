@@ -34,7 +34,7 @@ Basics
 
 ```
 
-Multipart upload, no client side encryption, no server-side encryption 
+Multipart upload, with and without server-side encryption 
 
 ```clojure
 
@@ -43,31 +43,16 @@ Multipart upload, no client side encryption, no server-side encryption
 (def cred {:access-key "...", 
            :secret-key "..."})
 
-(def s3c (s3/s3-client cred))
+(def tm (s3/s3-transfer-manager (s3/s3-client cred))) 
 
-(def tm (s3/s3-transfer-manager s3c)) 
-
+; no client side encryption, no server-side encryption
 (s3/upload-file tm "my-bucket" "some-key" "/path/to/file")
 
-```
-
-Multipart upload, no client side encryption, AES-256 server-side encryption
-
-```clojure
-
-(require '[aws.sdk.s3 :as s3])
-
-(def cred {:access-key "...",
-           :secret-key "..."})
-
-(def s3c (s3/s3-client cred))
-
-(def tm (s3/s3-transfer-manager s3c)) 
-
+; no client side encryption, AES-256 server-side encryption
 (s3/upload-file-sse tm "my-bucket" "some-key" "/path/to/file")
 
-```
 
+```
 
 Multipart upload, RSA client side encryption, no server-side encryption
 
@@ -75,7 +60,10 @@ You can create your keystore anywhere, a hidden folder in your home dir is a goo
 The following will both create a keystore and add an asymetric RSA pair to it: 
 
 ```bash
-keytool -genkey -keyalg RSA -dname "cn=John Doe, ou=IT, o=Acme, c=FR" -alias your-key-alias -keystore /path/to/keystore -storepass xxxxx -validity 365
+keytool -genkey -keyalg RSA 
+        -dname "cn=John Doe, ou=IT, o=Acme, c=FR" 
+        -alias my-alias -keystore /path/to/keystore 
+        -storepass my-ks-password -validity 365
 ```
 
 Then simply add the keystore and key info to the cred map.
@@ -86,16 +74,18 @@ Then simply add the keystore and key info to the cred map.
 
 (def cred {:access-key "...",
            :secret-key "...",
-           :ks-path    "/path/to/java/keystore"
-           :ks-pwd     "your keystore password"
-           :key-alias  "alias of key used for client side encryption"
-           :key-pwd    "password of key used for client side encryption" })
+           :ks-path    "/path/to/keystore"
+           :ks-pwd     "my-ks-password"
+           :key-alias  "my-alias"
+           :key-pwd    "my-key-password" })
 
-(def s3c (s3/s3-client-encryption cred))
+(def tm (s3/s3-transfer-manager (s3/s3-client-encryption cred)))
 
-(def tm (s3/s3-transfer-manager s3c))
-
+; client side encryption, no SSE
 (s3/upload-file tm "my-bucket" "some-key" "/path/to/file")
+
+; client side encryption + AES-256 server-side encryption
+(s3/upload-file-sse tm "my-bucket" "some-key" "/path/to/file")
 
 ```
 
